@@ -22,16 +22,18 @@ namespace EdsmScanner
 
             var cmd = new RootCommand
             {
-                new Option<int>(new []{"--scan-radius","-r"},50,"Scan radius in ly (default: 50)"),
+                new Option<int>(new []{"--scan-radius","-r"},100,"Scan radius in ly (default: 100)"),
                 new Option<bool>(new []{"--plot-journey","-p"},false,"Plot journey (default: false)"),
                 new Option<bool>(new []{"--include-bodies","-b"},false,"Include bodies in systems.txt (default: false)"),
                 new Option<TimeSpan>(new []{"--cache-duration"},TimeSpan.FromMinutes(30),"Duration on how long system details are cached (default: 00:30:00)"),
                 new Option<string[]>(new []{"--filter-body","-fb"},Array.Empty<string>,$"Body filter(s) written in form on LINQ expression like: \"{nameof(SystemBody.IsScoopable)}==true\". When applied, only the systems with at least one matching body will be returned."),
-                new Option<string[]>(new []{"--filter-system","-fs"},Array.Empty<string>,$"System filter(s) written in form on LINQ expression like: \"{nameof(SystemDetails.DiscoveredStars)} > 1\".")
+                new Option<string[]>(new []{"--filter-system","-fs"},Array.Empty<string>,$"System filter(s) written in form on LINQ expression like: \"{nameof(SystemDetails.DiscoveredStars)} > 1\"."),
+                new Option<int>(new []{"--max-systems","-max"},int.MaxValue,"Maximum number of systems to output"),
             };
             cmd.Description = "Edsm Scanner";
             cmd.AddArgument(new Argument<string>("origin-system") { Description = "Origin system name" });
-            cmd.Handler = CommandHandler.Create<string, int, bool, bool, TimeSpan, string[], string[]>(Scan);
+            cmd.AddArgument(new Argument<string?>("destination-system", () => null) { Description = "(Optional) Destination system name" });
+            cmd.Handler = CommandHandler.Create(Scan);
 
 
             var helpCmd = new Command("help", "Displays help");
@@ -89,10 +91,10 @@ namespace EdsmScanner
             Console.WriteLine();
         }
 
-        static async Task Scan(string originSystem, int scanRadius, bool plotJourney, bool includeBodies, TimeSpan cacheDuration, string[] filterSystem, string[] filterBody)
+        static async Task Scan(string originSystem, string? destinationSystem, int scanRadius, bool plotJourney, bool includeBodies, TimeSpan cacheDuration, string[] filterSystem, string[] filterBody, int max)
         {
             using var client = new EdsmClient(new SystemCache(cacheDuration));
-            var foundSystems = await new SystemResolver(client).SearchForSystems(originSystem, scanRadius);
+            var foundSystems = await new SystemResolver(client).SearchForSystems(originSystem, destinationSystem, scanRadius);
 
             // Only resolve bodies via EDSM if includeBodies is true or a non-false filter is specified
             SystemDetails[] resolvedSystems;
@@ -114,10 +116,10 @@ namespace EdsmScanner
             }
 
             var remainingSystems = resolvedSystems.Except(filteredSystems).ToArray();
-            await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, remainingSystems);
+            await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, destinationSystem, remainingSystems.Take(max).ToArray());
 
-            var orderedPartialSystems = new SystemOrderer(filteredSystems, plotJourney).Order();
-            await new SystemListWriter().WriteSystemList(originSystem, orderedPartialSystems, includeBodies, plotJourney);
+            var orderedPartialSystems = new SystemOrderer(filteredSystems.Take(max).ToArray(), plotJourney).Order();
+            await new SystemListWriter().WriteSystemList(originSystem, destinationSystem, orderedPartialSystems, includeBodies, plotJourney);
         }
     }
 }
