@@ -65,7 +65,7 @@ namespace EdsmScanner.Clients
         {
             try
             {
-                return (await _client.GetFromJsonAsync<SystemRef[]>($"api-v1/sphere-systems?systemName={Uri.EscapeDataString(originSystem)}&radius={radius}&showCoordinates=1"))!;
+                return (await _client.GetFromJsonAsync<SystemRef[]>($"api-v1/sphere-systems?systemName={Uri.EscapeDataString(originSystem)}&radius={radius}&showCoordinates=1&showId=1"))!;
             }
             catch (Exception ex)
             {

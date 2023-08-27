@@ -92,11 +92,28 @@ namespace EdsmScanner
         static async Task Scan(string originSystem, int scanRadius, bool plotJourney, bool includeBodies, TimeSpan cacheDuration, string[] filterSystem, string[] filterBody)
         {
             using var client = new EdsmClient(new SystemCache(cacheDuration));
-            var foundSystems = await new SystemResolver(client).ResolveSystemsAround(originSystem, scanRadius);
+            var foundSystems = await new SystemResolver(client).SearchForSystems(originSystem, scanRadius);
 
-            var filteredSystems = new SystemFilter(filterSystem, filterBody).Filter(foundSystems);
+            // Only resolve bodies via EDSM if includeBodies is true or a non-false filter is specified
+            SystemDetails[] resolvedSystems;
+            SystemDetails[] filteredSystems;
+            if (filterSystem.Contains("false") || filterBody.Contains("false"))
+            {
+                resolvedSystems = foundSystems.Select(s => new SystemDetails { Ref = s }).ToArray();
+                filteredSystems = new SystemDetails[0];
+            }
+            else if (includeBodies || filterSystem.Any() || filterBody.Any())
+            {
+                resolvedSystems = await new SystemResolver(client).GetSystemsDetails(foundSystems);
+                filteredSystems = new SystemFilter(filterSystem, filterBody).Filter(resolvedSystems);
+            }
+            else
+            {
+                resolvedSystems = foundSystems.Select(s => new SystemDetails { Ref = s }).ToArray();
+                filteredSystems = resolvedSystems;
+            }
 
-            var remainingSystems = foundSystems.Except(filteredSystems).ToArray();
+            var remainingSystems = resolvedSystems.Except(filteredSystems).ToArray();
             await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, remainingSystems);
 
             var orderedPartialSystems = new SystemOrderer(filteredSystems, plotJourney).Order();

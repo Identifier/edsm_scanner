@@ -17,13 +17,7 @@ namespace EdsmScanner.Search
             _client = client;
         }
 
-        public async Task<SystemDetails[]> ResolveSystemsAround(string originSystem, int radius)
-        {
-            var systems = await SearchForSystems(originSystem, radius);
-            return await GetSystemsDetails(systems);
-        }
-
-        private async Task<SystemDetails[]> GetSystemsDetails(SystemRef[] systems)
+        public async Task<SystemDetails[]> GetSystemsDetails(SystemRef[] systems)
         {
             Console.WriteLine("Getting systems details...");
             var notifier = new ProgressNotifier($"  Scanned systems: {{0}}/{systems.Length}");
@@ -51,7 +45,7 @@ namespace EdsmScanner.Search
             }
         }
 
-        private async Task<SystemRef[]> SearchForSystems(string originSystem, int radius)
+        public async Task<SystemRef[]> SearchForSystems(string originSystem, int radius)
         {
             Console.WriteLine($"Searching for systems in {radius}ly distance from: {originSystem}");
             var systems = await _client.SearchSystems(originSystem, radius);

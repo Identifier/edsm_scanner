@@ -7,19 +7,19 @@ namespace EdsmScanner.Models
     {
         private SystemBody[]? _filteredBodies;
         [Queryable]
-        public long? Id64 { get; set; }
+        public long? Id64 => Ref?.Id64;
         [Queryable]
-        public int DiscoveredStars => Bodies?.Count(b => b.Type.Equals("star", StringComparison.OrdinalIgnoreCase)) ?? 0;
+        public int? DiscoveredStars => Bodies?.Count(b => b.Type.Equals("star", StringComparison.OrdinalIgnoreCase));
         [Queryable]
-        public int DiscoveredBodies => Bodies?.Length ?? 0;
+        public int? DiscoveredBodies => Bodies?.Length;
         [Queryable]
-        public bool IsFullyDiscovered => BodyCount.GetValueOrDefault() > 0 && BodyCount <= DiscoveredBodies;
+        public bool? IsFullyDiscovered => BodyCount > 0 && DiscoveredBodies.HasValue ? BodyCount <= DiscoveredBodies : null;
 
         /// <summary>
         /// Expected count
         /// </summary>
         public int? BodyCount { get; set; }
-        public SystemBody[]? Bodies { get; set; } = Array.Empty<SystemBody>();
+        public SystemBody[]? Bodies { get; set; }
         public string Url { get; set; } = string.Empty;
         public SystemRef? Ref { get; set; }
 
