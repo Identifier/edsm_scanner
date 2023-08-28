@@ -8,12 +8,12 @@ namespace EdsmScanner.Writers
 {
     internal class SystemListWriter
     {
-        public async Task WriteSystemList(string originSystem, SystemDetails[] systems, bool includeBodies, bool journeyPlotted)
+        public async Task WriteSystemList(string originSystem, string? destinationSystem, SystemDetails[] systems, bool includeBodies, bool journeyPlotted)
         {
-            var path = PathSanitizer.SanitizePath($"systems_{originSystem}.txt");
+            var path = PathSanitizer.SanitizePath($"systems_{originSystem}{(destinationSystem != null ? $"_to_{destinationSystem}" : "")}.txt");
             await using var writer = new StreamWriter(path);
 
-            await writer.WriteLineAsync(journeyPlotted ? $"# distances calculated to previous system, starting from: {originSystem}" : $"# distances calculated to origin system: {originSystem}");
+            await writer.WriteLineAsync(journeyPlotted ? $"# distances calculated to previous system, starting from: {originSystem}" : destinationSystem == null ? $"# distances calculated to origin system: {originSystem}" : $"# distances calculated to straight-line route from origin system {originSystem} to destination system {destinationSystem}");
 
             foreach (var sys in systems)
             {
@@ -33,7 +33,7 @@ namespace EdsmScanner.Writers
 
         private static async Task WriteSystem(StreamWriter writer, SystemDetails sys, decimal distance)
         {
-            await writer.WriteLineAsync($"{sys.Ref.Name} [{distance:F2}ly] ({sys.Ref.BodyCount?.ToString() ?? "?"} bodies / {sys.DiscoveredBodies?.ToString() ?? "?"} discovered, of which {sys.DiscoveredStars?.ToString() ?? "?"} are stars) => {sys.Url}");
+            await writer.WriteLineAsync($"{sys.Ref.Name} (#{sys.Id64}) [{distance:F2}ly] ({sys.Ref.BodyCount?.ToString() ?? "?"} bodies / {sys.DiscoveredBodies?.ToString() ?? "?"} discovered, of which {sys.DiscoveredStars?.ToString() ?? "?"} are stars) => {sys.Url}");
         }
 
         private static async Task WriteBody(StreamWriter writer, SystemBody body)
