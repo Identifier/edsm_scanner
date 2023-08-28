@@ -94,7 +94,7 @@ namespace EdsmScanner
         static async Task Scan(string originSystem, string? destinationSystem, int scanRadius, bool plotJourney, bool includeBodies, TimeSpan cacheDuration, string[] filterSystem, string[] filterBody, int max)
         {
             using var client = new EdsmClient(new SystemCache(cacheDuration));
-            var foundSystems = await new SystemResolver(client).SearchForSystems(originSystem, destinationSystem, scanRadius);
+            var foundSystems = await new SystemResolver(client).SearchForSystems(originSystem, destinationSystem, scanRadius, max);
 
             // Only resolve bodies via EDSM if includeBodies is true or a non-false filter is specified
             SystemDetails[] resolvedSystems;
@@ -116,9 +116,9 @@ namespace EdsmScanner
             }
 
             var remainingSystems = resolvedSystems.Except(filteredSystems).ToArray();
-            await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, destinationSystem, remainingSystems.Take(max).ToArray());
+            await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, destinationSystem, remainingSystems);
 
-            var orderedPartialSystems = new SystemOrderer(filteredSystems.Take(max).ToArray(), plotJourney).Order();
+            var orderedPartialSystems = new SystemOrderer(filteredSystems, plotJourney).Order();
             await new SystemListWriter().WriteSystemList(originSystem, destinationSystem, orderedPartialSystems, includeBodies, plotJourney);
         }
     }
