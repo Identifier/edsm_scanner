@@ -7,7 +7,7 @@ namespace EdsmScanner.Writers
 {
     internal class VisitedSystemIdsWriter
     {
-        public async Task WriteVisitedSystems(string originSystem, string? destinationSystem, SystemDetails[] systems)
+        public async Task<string> WriteVisitedSystems(string originSystem, string? destinationSystem, SystemDetails[] systems)
         {
             var path = PathSanitizer.SanitizePath($"visited_{originSystem}{(destinationSystem != null ? $" to {destinationSystem}" : "")}.txt");
             await using var writer = new StreamWriter(path);
@@ -21,6 +21,7 @@ namespace EdsmScanner.Writers
                 }
             }
             Console.WriteLine($"Generated {path} with {lines} systems.");
+            return path;
         }
     }
 }

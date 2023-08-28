@@ -51,7 +51,7 @@ namespace EdsmScanner.Search
         {
             Console.Write($"Searching for systems within a {radius}ly distance from {originSystem}{(destinationSystem != null ? $" to {destinationSystem}" : "")}: ");
             var systems = new HashSet<SystemRef>(await _client.SearchSystems(originSystem, radius));
-            Console.WriteLine($"{systems.Count:N0} found.");
+            Console.WriteLine($"{systems.Count:N0} systems found.");
 
             // Get the coordinates of the origin system
             var origin = systems.FirstOrDefault(s => s.Name.Equals(originSystem, StringComparison.OrdinalIgnoreCase));
@@ -101,7 +101,7 @@ namespace EdsmScanner.Search
                     else
                         searchRadius = radius; // We have a good new starting point now, so reset the search radius to the user-specified one.
 
-                    Console.Write($"{originSystem} >> {DistanceBetween(origin, next),5:N0}ly >> {next.Name,-20} >> {DistanceBetween(next, destination),5:N0}ly >> {destinationSystem} ({DistanceToRoute(origin, destination, next):N0}ly dev): ");
+                    Console.Write($"{originSystem} " + $"-{DistanceBetween(origin, next):N0}ly-->".PadLeft(12, '-') + $" {next.Name} ({DistanceToRoute(origin, destination, next):N0}ly dev) ".PadRight(35) + $"-{DistanceBetween(next, destination),5:N0}ly-->".PadLeft(12, '-') + $" {destinationSystem}: ");
 
                     // Grab a new set of search results from here
                     var results = await _client.SearchSystems(next.Name, searchRadius);
@@ -109,9 +109,11 @@ namespace EdsmScanner.Search
                         throw new InvalidOperationException($"Unable to find a route from {next.Name} to {destinationSystem} using a search radius of {searchRadius}ly");
 
                     spheres.Add((next, results));
+
+                    var oldCount = systems.Count;
                     systems.UnionWith(results);
 
-                    Console.WriteLine($"{results.Length:N0} found.");
+                    Console.WriteLine($"{systems.Count - oldCount:N0} new systems found.");
                 }
 
                 Console.WriteLine($"Total systems found: {systems.Count:N0}.");
@@ -120,10 +122,13 @@ namespace EdsmScanner.Search
                 await using var writer = new System.IO.StreamWriter(path);
                 foreach (var sys in systems.OrderBy(s => DistanceToRoute(origin, destination, s)).ToArray())
                 {
-                    await writer.WriteLineAsync($"{sys.Id64,-20}\t{sys.Name,-20}\t{sys.Distance,5:N2}ly-fo\t{SystemResolver.DistanceToRoute(origin, destination, sys),5:N2}ly-fr");
+                    await writer.WriteLineAsync($"{sys.Id64,-25}\t{sys.Name,-35}\t{DistanceBetween(origin, sys),6:N2}ly from origin\t{sys.Distance,6:N2}ly from search\t{SystemResolver.DistanceToRoute(origin, destination, sys),6:N2}ly from route");
                 }
 #endif
-                // Return the systems sorted by distance from the route.
+                // Make the systems' .Distance property reflect the distance from the origin, not the distance from their EDSM search.
+                systems.Select(s => s.Distance = (decimal)DistanceBetween(origin, s));
+
+                // Return the systems sorted by distance from the route line so that one can simply truncate the list to get the closest systems along the route.
                 return systems.OrderBy(s => DistanceToRoute(origin, destination, s)).ToArray();
             }
 
@@ -145,6 +150,12 @@ namespace EdsmScanner.Search
 
         public static double DistanceToRoute(SystemRef origin, SystemRef destination, SystemRef system)
         {
+            if (system == origin || system == destination)
+                return 0;
+
+            if (origin == destination)
+                return DistanceBetween(origin, system);
+
             // Convert CoordF to Vector3 for easier vector operations
             Vector3 vOrigin = new Vector3(origin.Coords.X, origin.Coords.Y, origin.Coords.Z);
             Vector3 vDestination = new Vector3(destination.Coords.X, destination.Coords.Y, destination.Coords.Z);

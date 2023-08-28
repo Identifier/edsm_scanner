@@ -30,7 +30,7 @@ namespace VisitedStarCacheMerger
 
         public void MergeSystemIds(IEnumerable<long> systemIds)
         {
-            var maxDate = _records.Max(r => r.Value.VisitedDate);
+            var maxDate = _records.Max(r => r.Value.VisitedDate) + 1; // +1 to make sure the new records always take precedence
 
             foreach (var systemId in systemIds)
             {

@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace VisitedStarCacheMerger
 {
-    class Program
+    public class Program
     {
         private static readonly string TempCachePath = $"{AppContext.BaseDirectory}{Path.DirectorySeparatorChar}.cache";
         private static int _totalIdsLoaded = 0;
 
-        static async Task Main(string[] args)
+        public static async Task Main(string[] args)
         {
             if (args.Length != 2)
             {

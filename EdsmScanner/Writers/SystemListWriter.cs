@@ -8,7 +8,7 @@ namespace EdsmScanner.Writers
 {
     internal class SystemListWriter
     {
-        public async Task WriteSystemList(string originSystem, string? destinationSystem, SystemDetails[] systems, bool includeBodies, bool journeyPlotted)
+        public async Task<string> WriteSystemList(string originSystem, string? destinationSystem, SystemDetails[] systems, bool includeBodies, bool journeyPlotted)
         {
             var path = PathSanitizer.SanitizePath($"systems_{originSystem}{(destinationSystem != null ? $"_to_{destinationSystem}" : "")}.txt");
             await using var writer = new StreamWriter(path);
@@ -29,6 +29,7 @@ namespace EdsmScanner.Writers
             }
 
             Console.WriteLine($"Generated {path} with {systems.Length} systems.");
+            return path;
         }
 
         private static async Task WriteSystem(StreamWriter writer, SystemDetails sys, decimal distance)
