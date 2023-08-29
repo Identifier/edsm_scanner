@@ -121,10 +121,10 @@ namespace EdsmScanner
                 filteredSystems = resolvedSystems;
             }
 
-            var remainingSystems = resolvedSystems.Except(filteredSystems).ToArray();
+            var remainingSystems = resolvedSystems.Except(filteredSystems).Take(max).ToArray();
             var visitedFile = await new VisitedSystemIdsWriter().WriteVisitedSystems(originSystem, destinationSystem, remainingSystems);
 
-            var orderedPartialSystems = new SystemOrderer(filteredSystems, plotJourney).Order();
+            var orderedPartialSystems = new SystemOrderer(filteredSystems, plotJourney).Order().Take(max).ToArray();
             await new SystemListWriter().WriteSystemList(originSystem, destinationSystem, orderedPartialSystems, includeBodies, plotJourney);
 
             if (merge)

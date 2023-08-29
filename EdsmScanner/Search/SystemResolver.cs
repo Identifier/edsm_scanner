@@ -50,11 +50,11 @@ namespace EdsmScanner.Search
         public async Task<SystemRef[]> SearchForSystems(string originSystem, string? destinationSystem, int radius, int max)
         {
             Console.Write($"Searching for systems within a {radius}ly distance from {originSystem}{(destinationSystem != null ? $" to {destinationSystem}" : "")}: ");
-            var systems = new HashSet<SystemRef>(await _client.SearchSystems(originSystem, radius));
-            Console.WriteLine($"{systems.Count:N0} systems found.");
+            var originSystems = await _client.SearchSystems(originSystem, radius);
+            Console.WriteLine($"{originSystems.Length:N0} systems found.");
 
             // Get the coordinates of the origin system
-            var origin = systems.FirstOrDefault(s => s.Name.Equals(originSystem, StringComparison.OrdinalIgnoreCase));
+            var origin = originSystems.FirstOrDefault(s => s.Name.Equals(originSystem, StringComparison.OrdinalIgnoreCase));
             if (origin == null)
                 throw new Exception($"Unable to find system {originSystem} in search results.");
 
@@ -67,7 +67,11 @@ namespace EdsmScanner.Search
                     throw new Exception($"Unable to find system {destinationSystem} in search results.");
 
                 // For each sphere of systems returned, if the volume doesn't include the destination system then find the one closest system to the destination and continue from there.
-                var spheres = new List<(SystemRef center, SystemRef[] systems)> { (origin, systems.ToArray()) };
+                var spheres = new List<(SystemRef center, SystemRef[] systems)> { (origin, originSystems) };
+
+                // Collection of systems surrounding the route from origin to destination.
+                var systemsOnRoute = new HashSet<SystemRef>();
+                systemsOnRoute.UnionWith(originSystems.Where(s => DistanceToRoute(origin, destination, s) >= 0));
 
                 // Sometimes we need to increase our search radius from the user-specified one in order to find a path between two systems.
                 var searchRadius = radius;
@@ -75,7 +79,7 @@ namespace EdsmScanner.Search
                 while (true)
                 {
                     // Stop if we've already reached our limit.
-                    if (systems.Count >= max)
+                    if (systemsOnRoute.Count >= max)
                     {
                         Console.WriteLine($"Reached maximum of {max} systems.");
                         break;
@@ -85,7 +89,7 @@ namespace EdsmScanner.Search
                     if (SphereContains(spheres.Last().center, radius, destination)) // .Last() is O(1) on List<T>
                     {
                         Console.WriteLine("We've reached our destination's space.");
-                        systems.UnionWith(destinationSystems);
+                        systemsOnRoute.UnionWith(destinationSystems.Where(s => DistanceToRoute(origin, destination, s) >= 0));
                         break;
                     }
 
@@ -110,30 +114,32 @@ namespace EdsmScanner.Search
 
                     spheres.Add((next, results));
 
-                    var oldCount = systems.Count;
-                    systems.UnionWith(results);
+                    var oldCount = systemsOnRoute.Count;
+                    systemsOnRoute.UnionWith(results.Where(s => DistanceToRoute(origin, destination, s) >= 0));
 
-                    Console.WriteLine($"{systems.Count - oldCount:N0} new systems found.");
+                    Console.WriteLine($"{systemsOnRoute.Count - oldCount:N0} new systems found.");
                 }
 
-                Console.WriteLine($"Total systems found: {systems.Count:N0}.");
+                Console.WriteLine($"Total systems surrounding route: {systemsOnRoute.Count:N0}.");
+
+                // Make the systems' .Distance property reflect the distance from the origin, not the distance from their EDSM search.
+                systemsOnRoute.Select(s => s.Distance = (decimal)DistanceBetween(origin, s));
+
+                // Return the systems sorted by distance from the route line so that one can simply truncate the list to get the closest systems along the route.
+                var orderedSystems = systemsOnRoute.OrderBy(s => DistanceToRoute(origin, destination, s)).ToArray();
 #if DEBUG
                 var path = Writers.PathSanitizer.SanitizePath($"visited_{originSystem}{(destinationSystem != null ? $" to {destinationSystem}" : "")}.debug.txt");
                 await using var writer = new System.IO.StreamWriter(path);
-                foreach (var sys in systems.OrderBy(s => DistanceToRoute(origin, destination, s)).ToArray())
+                foreach (var sys in orderedSystems)
                 {
                     await writer.WriteLineAsync($"{sys.Id64,-25}\t{sys.Name,-35}\t{DistanceBetween(origin, sys),6:N2}ly from origin\t{sys.Distance,6:N2}ly from search\t{SystemResolver.DistanceToRoute(origin, destination, sys),6:N2}ly from route");
                 }
 #endif
-                // Make the systems' .Distance property reflect the distance from the origin, not the distance from their EDSM search.
-                systems.Select(s => s.Distance = (decimal)DistanceBetween(origin, s));
-
-                // Return the systems sorted by distance from the route line so that one can simply truncate the list to get the closest systems along the route.
-                return systems.OrderBy(s => DistanceToRoute(origin, destination, s)).ToArray();
+                return orderedSystems;
             }
 
             // Return the systems sorted by distance from the origin.
-            return systems.OrderBy(s => DistanceBetween(origin, s)).ToArray();
+            return originSystems.OrderBy(s => DistanceBetween(origin, s)).ToArray();
         }
 
         public static bool SphereContains(SystemRef center, int radius, SystemRef target)
@@ -150,6 +156,7 @@ namespace EdsmScanner.Search
 
         public static double DistanceToRoute(SystemRef origin, SystemRef destination, SystemRef system)
         {
+            // Check for special cases where the system is the origin or destination
             if (system == origin || system == destination)
                 return 0;
 
@@ -162,17 +169,25 @@ namespace EdsmScanner.Search
             Vector3 vSystem = new Vector3(system.Coords.X, system.Coords.Y, system.Coords.Z);
 
             // Calculate the route vector
-            Vector3 vRoute = vDestination - vOrigin;
+            Vector3 vOriginToDestination = vDestination - vOrigin;
 
             // Calculate vectors from point to endpoints of line segment
-            Vector3 vSystemToOrigin = vSystem - vOrigin;
-            Vector3 vSystemToDestination = vSystem - vDestination;
+            Vector3 vOriginToSystem = vSystem - vOrigin;
+            Vector3 vDestinationToSystem = vSystem - vDestination;
 
-            // Calculate the cross product of the vectors (vSystem - vOrigin) and vSystem - vDestination)
-            Vector3 crossProduct = Vector3.Cross(vSystemToOrigin, vSystemToDestination);
+            // Check if the system is before the route
+            if (Vector3.Dot(vOriginToDestination, vOriginToSystem) < 0)
+                return -1;
+
+            // Check if the system is after the route
+            if (Vector3.Dot(vOriginToDestination, vDestinationToSystem) > 0)
+                return -1;
+
+            // Calculate the cross product of the vectors (vSystem - vOrigin) and (vSystem - vDestination)
+            Vector3 crossProduct = Vector3.Cross(vOriginToSystem, vDestinationToSystem);
 
             // Calculate the magnitude of the cross product and divide it by the magnitude of the route vector
-            double distance = crossProduct.Length() / vRoute.Length();
+            double distance = crossProduct.Length() / vOriginToDestination.Length();
 
             return distance;
         }
