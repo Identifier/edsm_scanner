@@ -28,16 +28,17 @@ namespace VisitedStarCacheMerger
             return new Cache(header, records, footer);
         }
 
-        public void MergeSystemIds(IEnumerable<long> systemIds)
+        public void MergeSystemIds(IList<long> systemIds)
         {
-            var maxDate = _records.Max(r => r.Value.VisitedDate) + 1; // +1 to make sure the new records always take precedence
+            // Make sure the first records always take precedence if the cache file gets truncated by Elite
+            var maxDate = _records.Max(r => r.Value.VisitedDate) + systemIds.Count;
 
             foreach (var systemId in systemIds)
             {
                 if (_records.TryGetValue(systemId, out var r))
-                    r.VisitedDate = maxDate;
+                    r.VisitedDate = maxDate--;
                 else
-                    _records[systemId] = new Record { Id = systemId, VisitedDate = maxDate, Visits = 1 };
+                    _records[systemId] = new Record { Id = systemId, VisitedDate = maxDate--, Visits = 1 };
             }
 
             _header.UpdateRows(_records.Count);
